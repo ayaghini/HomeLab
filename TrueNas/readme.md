@@ -22,3 +22,9 @@ Here's the method that worked for me. Since **TrueNAS is evolving**, I will upda
 Managing **users, ACLs (Access Control Lists), and app shares** can be a complex topic in TrueNAS. If you're working with **TrueNAS SCALE 24**, I highly recommend checking out **Lawrence Systems' video**, which covers best practices and configurations.
 
 🎥 **[TrueNAS SCALE 24 - Users & ACL Guide](https://www.youtube.com/watch?v=59NGNZ0kO04)**
+
+## 💡 Good to Know
+
+TrueNAS utilizes **vDEVs (Virtual Devices)** as building blocks for pools, and understanding how to plan and size them is crucial for performance and data safety. Learn more about the considerations for **special vDEVs (SVDEVs)** and how they can impact your setup:
+
+🔗 **[Read more about vDEVs](https://forums.truenas.com/t/special-vdev-svdev-planning-sizing-and-considerations/5086)**
