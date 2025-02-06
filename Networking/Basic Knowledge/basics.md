@@ -1,0 +1,1 @@
+good vide by RO explaiing VLANs: https://www.youtube.com/watch?v=XdqP14NclZ0&t=978s

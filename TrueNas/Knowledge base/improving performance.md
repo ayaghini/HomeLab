@@ -1,0 +1,1 @@
+this is a good video by Tim, explaining what are good practices with TrueNas and what is what, Log, L2ARC networking and etc. https://www.youtube.com/watch?v=Uzk6Janio0g&list=PL8cwSAAaP9W3DD9R0Zx-UtzdrH0MlOR5m&index=4
