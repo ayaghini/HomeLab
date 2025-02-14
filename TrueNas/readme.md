@@ -28,3 +28,7 @@ Managing **users, ACLs (Access Control Lists), and app shares** can be a complex
 TrueNAS utilizes **vDEVs (Virtual Devices)** as building blocks for pools, and understanding how to plan and size them is crucial for performance and data safety. Learn more about the considerations for **special vDEVs (SVDEVs)** and how they can impact your setup:
 
 🔗 **[Read more about vDEVs](https://forums.truenas.com/t/special-vdev-svdev-planning-sizing-and-considerations/5086)**
+
+Bonding two network interfaces for improved performance:
+https://www.truenas.com/docs/scale/scaletutorials/network/interfaces/settinguplagg/
+bond is not working initially, the Unify pro 24 supports aggregation but the truenas test fails. need to investigate more
