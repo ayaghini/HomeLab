@@ -1,4 +1,4 @@
-![Custome designed rackmount hardware](Rackmount assembly20250218.png)
+![Custom designed rackmount hardware]("Rackmount assembly20250218.png")
 
 # Custom Designed and Built Rackmount Items
 
