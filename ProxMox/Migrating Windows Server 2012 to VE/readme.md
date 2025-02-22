@@ -24,3 +24,10 @@ These changes ensured a smooth migration process.
 ---
 
 This approach finally worked for me. Hopefully, it helps others facing similar migration challenges!
+
+## Few More Updates
+
+- The other system I needed to migrate was using **Legacy BIOS**.  
+- Nothing too different, except that I needed to create another **USB boot drive** for Legacy BIOS.  
+- The older machine was successfully copied.  
+- Now, I need to **take care of the drives**, attach them, and pass them through.

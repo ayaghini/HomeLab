@@ -29,6 +29,27 @@ TrueNAS utilizes **vDEVs (Virtual Devices)** as building blocks for pools, and u
 
 🔗 **[Read more about vDEVs](https://forums.truenas.com/t/special-vdev-svdev-planning-sizing-and-considerations/5086)**
 
-Bonding two network interfaces for improved performance:
-https://www.truenas.com/docs/scale/scaletutorials/network/interfaces/settinguplagg/
-bond is not working initially, the Unify pro 24 supports aggregation but the truenas test fails. need to investigate more
+# TrueNAS Notes
+
+## Bonding Two Network Interfaces for Improved Performance  
+[TrueNAS LAGG Setup Guide](https://www.truenas.com/docs/scale/scaletutorials/network/interfaces/settinguplagg/)  
+
+- Attempted to bond two network interfaces for improved performance.  
+- The Unifi Pro 24 supports aggregation, but the TrueNAS test failed.  
+- Need to investigate further why the bond is not working initially.  
+
+---
+
+## Extending VDEVs in New TrueNAS SCALE  
+
+- Used the new VDEV extension feature.  
+- After a day, it was stuck at **25%**, so I manually restarted TrueNAS.  
+- The four drives appeared, but the capacity was incorrect.  
+- Ran the following command to check status:  
+
+  ```sh
+  sudo zpool status -v
+  ```
+
+- Since **6 days ago**, the expansion has been running.  
+- Will wait a bit longer to see if it completes.
