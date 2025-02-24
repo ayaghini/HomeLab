@@ -2,3 +2,5 @@ I have three raspberry pi 4 8GB to use as a cluster. I have already designed the
 
 Installed Raspberry pi OS 64
 after boot, using SSh i used sudo raspi-config to enable vnc
+
+
