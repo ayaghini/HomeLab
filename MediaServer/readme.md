@@ -108,3 +108,36 @@ The Blu-ray drive is not being passed through completely to the VM, causing auto
 - If the SATA controller is shared with your hard drive, it cannot be passed through directly.
 - Follow this discussion for alternatives: [ARM GitHub Discussion](https://github.com/automatic-ripping-machine/automatic-ripping-machine/discussions/965).
 
+
+---
+
+## 📂 Step 5: Share the Completed Folder with Jellyfin
+
+1. **Install Samba**:
+   ```bash
+   sudo apt update
+   sudo apt install samba -y
+   ```
+
+2. **Edit Samba Configuration**:
+   ```bash
+   sudo nano /etc/samba/smb.conf
+   ```
+
+3. **Add the Following to the Configuration File**:
+   ```ini
+   [Media]
+   path = /home/arm/media/completed
+   browseable = yes
+   read only = yes
+   guest ok = yes
+   ```
+
+4. **Restart Samba for Changes to Take Effect**:
+   ```bash
+   sudo systemctl restart smbd
+   ```
+
+---
+
+
