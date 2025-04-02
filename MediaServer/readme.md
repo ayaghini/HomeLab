@@ -1,7 +1,7 @@
 # Automated Ripping Machine (ARM) Setup Guide
 
 ## Overview
-I am going to create an Automated Ripping Machine (ARM). I will be following this guide: [YouTube Guide](https://www.youtube.com/watch?v=wPWx6GISIhY&t=706s).
+I am going to create an Automated Ripping Machine (ARM). I will be following this guide: [YouTube Guide](https://www.youtube.com/watch?v=wPWx6GISIhY&t=706s). end up using this: [GitHub Page](https://github.com/automatic-ripping-machine/automatic-ripping-machine/discussions/965) 
 
 ## Step 1: Install Proxmox
 
@@ -108,6 +108,140 @@ The Blu-ray drive is not being passed through completely to the VM, causing auto
 - If the SATA controller is shared with your hard drive, it cannot be passed through directly.
 - Follow this discussion for alternatives: [ARM GitHub Discussion](https://github.com/automatic-ripping-machine/automatic-ripping-machine/discussions/965).
 
+# Bonus: Supporting Intel Quick Sync for ARM (Automatic Ripping Machine)
+
+## ⚠️ Problem
+
+I was getting **13–18 fps** for decoding, which is quite low.  
+To improve performance, I decided to enable **Intel Quick Sync** support.
+
+Reference:  
+🔗 [GitHub Issue & Solution](https://github.com/automatic-ripping-machine/automatic-ripping-machine/issues/1248#issuecomment-2520524653)
+
+---
+
+## 🛠 Steps to Enable Quick Sync
+
+### 1. Create a Custom Dockerfile
+
+Inside the `arm` folder:
+
+```bash
+nano Dockerfile
+```
+
+Paste the following content:
+
+```Dockerfile
+FROM automaticrippingmachine/automatic-ripping-machine:latest 
+LABEL desc="ARM w/ Intel Quick Sync Video Support"
+
+RUN apt update -y && \
+    apt upgrade -y && \
+    apt install -y libmfx1 libmfx-tools libmfx-dev vorbis-tools wget && \
+    mkdir -p quicksync && cd quicksync && \
+    git clone https://github.com/intel/libva.git libva && \
+    cd libva && \
+    ./autogen.sh && \
+    make && make install && \
+    cd .. && \
+    wget https://github.com/Intel-Media-SDK/MediaSDK/releases/download/intel-mediasdk-21.3.5/MediaStack.tar.gz && \
+    tar -xvf MediaStack.tar.gz && \
+    cd MediaStack && \
+    bash install_media.sh && \
+    cd .. && \
+    git clone https://github.com/Intel-Media-SDK/MediaSDK msdk && \
+    cd msdk && \
+    mkdir build && cd build && \
+    cmake .. && \
+    make && make install && \
+    cd ../.. && \
+    rm -rf quicksync
+```
+
+Then build the Docker image:
+
+```bash
+docker build -t arm-qsv .
+```
+
+⏳ **Note:** This will take a while.
+
+After completion:
+
+```bash
+docker images
+```
+
+You should see `arm-qsv`.
+
+---
+
+### 2. Create `start_arm_container.sh`
+
+```bash
+nano start_arm_container.sh
+```
+
+Update the image name and add the rendering device:
+
+```bash
+#!/bin/bash
+docker run -d \
+    -p "8080:8080" \
+    -e ARM_UID="1000" \
+    -e ARM_GID="1000" \
+    -v "/home/arm:/home/arm" \
+    -v "/home/arm/music:/home/arm/music" \
+    -v "/home/arm/logs:/home/arm/logs" \
+    -v "/home/arm/media:/home/arm/media" \
+    -v "/home/arm/config:/etc/arm/config" \
+    --device="/dev/sr0:/dev/sr0" \
+    --device="/dev/sg0:/dev/sg0" \
+    --device="/dev/dri/renderD128:/dev/dri/renderD128" \
+    --privileged \
+    --restart "always" \
+    --name "arm-rippers" \
+    --cpuset-cpus='0-5' \
+    arm-qsv:latest
+```
+
+Then run:
+
+```bash
+docker stop arm-rippers
+docker rm arm-rippers
+./start_arm_container.sh
+```
+
+---
+
+### 3. Update `config/arm.yaml`
+
+```bash
+nano config/arm.yaml
+```
+
+Add or update the following:
+
+```yaml
+HB_PRESET_DVD: "H.265 QSV 1080p"
+HB_PRESET_BD: "H.265 QSV 2160p 4K"
+
+# Additional HandBrake arguments for DVDs.
+HB_ARGS_DVD: "--subtitle scan -F --quality=18 --encoder-preset=quality"
+
+# Additional Handbrake arguments for Bluray Discs.
+HB_ARGS_BD: "--subtitle scan -F --subtitle-burned --audio-lang-list eng --all-audio --quality=22 --encoder-preset=quality"
+```
+
+Save and exit, then restart the container:
+
+```bash
+docker restart arm-rippers
+```
+
+✅ You should now have hardware-accelerated encoding using Intel Quick Sync.
 
 ---
 
