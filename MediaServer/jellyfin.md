@@ -91,4 +91,10 @@ Follow the **official Jellyfin installation guide**:
 - Start enjoying your movies! 🎥🍿
 
 
+now I am going to onstall jellyfin on raspberry pi:
+https://pimylifeup.com/raspberry-pi-jellyfin/
+
+
+
+
 

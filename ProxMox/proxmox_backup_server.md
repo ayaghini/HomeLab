@@ -76,3 +76,56 @@ By default, the backup job includes **all disks**, including data volumes. In my
 
 **Recommendation:**  
 Carefully select only the VMs or containers and specific disks you want to back up. Exclude large data volumes manually when configuring the backup job.
+
+### Using a NAS for Storage in Proxmox Backup Server
+
+One way to add storage to your Proxmox Backup Server is by mounting a NAS (Network Attached Storage) share.
+
+---
+
+#### 🔧 Step 1: Create a Mount Point
+
+```bash
+sudo mkdir -p /media/Data
+```
+
+---
+
+#### 🔍 Step 2: List Available Shares on the NAS
+
+This helps you identify the correct share name:
+
+```bash
+smbclient -L //172.29.32.184
+```
+
+*Make sure to replace the IP with your NAS address.*
+
+---
+
+#### 🔗 Step 3: Mount the NAS Share
+
+Replace `sharename` and `raghu` with your actual share name and username:
+
+```bash
+sudo mount -t cifs -o username=raghu //172.29.32.184/sharename /media/Data/
+```
+
+You may be prompted for your password.
+
+---
+
+#### 🗂️ Step 4: Use in Proxmox Backup Server
+
+Once mounted, you can reference the NAS directly in your `diskStore` configuration.
+
+Example path:
+```
+/media/Data
+```
+
+---
+
+📚 **Reference**:  
+[How to map a network drive in Ubuntu – AskUbuntu](https://askubuntu.com/questions/46183/how-to-map-a-network-drive)
+

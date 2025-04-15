@@ -272,6 +272,46 @@ docker restart arm-rippers
    sudo systemctl restart smbd
    ```
 
+### Transferring Files to NAS Using `rsync` and CIFS Mount
+
+Here's a quick guide to mount your NAS and transfer files to it using `rsync`.
+
 ---
+
+#### 📁 Step 1: Create a Mount Point
+
+```bash
+mkdir /media/mediaNASmnt
+```
+
+---
+
+#### 🔗 Step 2: Mount the NAS Share
+
+```bash
+sudo mount -t cifs -o username=yaghini,password=mypass,uid=1000,gid=1000,dir_mode=0775,file_mode=0664 //192.168.3.225/mediaNAS /media/mediaNASmnt
+```
+
+Replace:
+- `yaghini` with your NAS username  
+- `mypass` with your NAS password  
+- `192.168.3.225` with your NAS IP  
+- `mediaNAS` with your actual share name
+
+---
+
+#### 🔄 Step 3: Transfer Files with `rsync`
+
+```bash
+rsync -a /home/arm/media/completed/ /media/mediaNASmnt/
+```
+
+This will sync all files from your source folder to the mounted NAS directory.
+
+---
+
+📝 **Note**: The `-a` flag in `rsync` preserves permissions, symbolic links, and timestamps.
+
+
 
 
