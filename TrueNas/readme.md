@@ -53,3 +53,9 @@ TrueNAS utilizes **vDEVs (Virtual Devices)** as building blocks for pools, and u
 
 - Since **6 days ago**, the expansion has been running.  
 - Will wait a bit longer to see if it completes.
+
+## Using extrnal drive as a back up
+I am following the suggestion in post below: 
+https://www.reddit.com/r/truenas/comments/q5v1oj/can_you_backup_to_external_drive/?rdt=51193
+
+The idea is to use my 14TB WD External drive as a back up. I connected the WD directly to the machine, used ProxMox -> add hardware to add it to TrueNas and then inside truenas I added that drive as a storage pool. then Data Protection -> Replication Tasks and setup to run at 12AM every day.
