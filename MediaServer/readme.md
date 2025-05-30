@@ -3,6 +3,9 @@
 ## Overview
 I am going to create an Automated Ripping Machine (ARM). I will be following this guide: [YouTube Guide](https://www.youtube.com/watch?v=wPWx6GISIhY&t=706s). end up using this: [GitHub Page](https://github.com/automatic-ripping-machine/automatic-ripping-machine/discussions/965) 
 
+## Quick Note (upgrading)
+see: [Updating Docker](https://github.com/automatic-ripping-machine/automatic-ripping-machine/wiki/Docker-Upgrading)
+
 ## Step 1: Install Proxmox
 
 - Install **Proxmox** on your system.
