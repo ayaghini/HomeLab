@@ -6,6 +6,12 @@ I am going to create an Automated Ripping Machine (ARM). I will be following thi
 ## Quick Note (upgrading)
 see: [Updating Docker](https://github.com/automatic-ripping-machine/automatic-ripping-machine/wiki/Docker-Upgrading)
 
+docker stop arm-rippers
+docker pull automaticrippingmachine/automatic-ripping-machine
+docker container prune
+cd /home/arm/
+./start_arm_container.sh
+
 ## Step 1: Install Proxmox
 
 - Install **Proxmox** on your system.
