@@ -49,6 +49,9 @@ float gas_resistance = NAN;
 
 float tempOffset = -6.55;
 
+const unsigned long sensorInterval = 10000; // read every 2 seconds
+unsigned long lastSensorRead = 0;
+
 // -------------------- Timers --------------------
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastMqttUpdate = 0;
@@ -312,8 +315,13 @@ void loop() {
   }
   mqttClient.loop();
 
-  readBME680();
-  updateDisplay();
+  if (millis() - lastSensorRead >= sensorInterval) {
+    lastSensorRead = millis();
+    readBME680();
+    updateDisplay();
+  }
+
+  
 
   if (millis() - lastMqttUpdate >= mqttInterval) {
     lastMqttUpdate = millis();
