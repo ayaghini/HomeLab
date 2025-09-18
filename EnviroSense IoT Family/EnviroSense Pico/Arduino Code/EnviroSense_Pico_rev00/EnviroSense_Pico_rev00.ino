@@ -47,7 +47,7 @@ float humidity = NAN;
 float pressure = NAN;
 float gas_resistance = NAN;
 
-float tempOffset = -6.55;
+float tempOffset = -3.06;
 
 const unsigned long sensorInterval = 10000; // read every 2 seconds
 unsigned long lastSensorRead = 0;
