@@ -44,7 +44,7 @@ float tVoc = 0, eCo2 = 0, lasttVoc, lasteCo2;
 //--SHT30
 SHT3X sht30(0x45);
 float temp = 0, humid = 0, lastTemp, lastHumid;
-float tempOffset = 24.3-27.9;
+float tempOffset = 24.3 - 27.9;
 
 //+++++++++SETUP PARAMETERS++++++++++
 int state = 0;
@@ -84,6 +84,8 @@ const char* eCO2_topic = "EnviroSenseTouch/ENVT_equivalentCO2";
 PubSubClient mqttClient(client);
 long intervalMQTT = 30 * 1000, lastTimeSentMQTT = intervalMQTT;
 
+unsigned long touchOverrideTime = 0;     
+const unsigned long touchOverrideDuration = 5000;
 //--------------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
@@ -256,17 +258,18 @@ void reconnectMQTT() {
 }
 
 void HandleTouch() {
-  TS_Point p = ts.getPoint();
+  touchOverrideTime = millis(); 
+  // TS_Point p = ts.getPoint();
 
-  tft.fillScreen(ILI9341_BLACK);
-  tft.setCursor(0, 0);
+  // tft.fillScreen(ILI9341_BLACK);
+  // tft.setCursor(0, 0);
 
-  tft.print("Pressure = ");
-  tft.println(p.z);
-  tft.print("X = ");
-  tft.println(p.x);
-  tft.print("Y = ");
-  tft.println(p.y);
+  // tft.print("Pressure = ");
+  // tft.println(p.z);
+  // tft.print("X = ");
+  // tft.println(p.x);
+  // tft.print("Y = ");
+  // tft.println(p.y);
 }
 
 void UpdateTime() {
@@ -308,7 +311,7 @@ void UpdateDisplay() {
   float v = Difrentiator(tVoc, lasttVoc);
   float c = Difrentiator(eCo2, lasteCo2);
 
-  if (t >= displayThereshold || h >= displayThereshold || c > +displayThereshold) {
+  if (t >= displayThereshold || h >= displayThereshold || c >= displayThereshold) {
     DisplayManager();
   }
 }
@@ -339,6 +342,16 @@ void DrawWeatherIcon(int x, int y, int size, String condition) {
 }
 
 void DisplayManager() {
+  int hourNow = timeClient.getHours();
+  // Check if we are within the 5-second override window
+  bool forceOn = (millis() - touchOverrideTime) < touchOverrideDuration;
+
+  // If between 7 PM and 6 AM, blank the screen, unless forced
+  if (!forceOn && (hourNow >= 19 || hourNow < 6)) {
+    tft.fillScreen(ILI9341_BLACK);
+    return; // skip drawing
+  }
+
   tft.fillScreen(ILI9341_BLACK);
 
   int width = tft.width();
@@ -354,13 +367,13 @@ void DisplayManager() {
   // Weather icon + temperature
   // DrawWeatherIcon(width / 2, cy, 2, weatherCondition);
   // tft.setTextColor(ILI9341_WHITE);
-    tft.setTextColor(ILI9341_MAROON);
+  tft.setTextColor(ILI9341_MAROON);
 
   tft.setTextSize(3);
-  PrintCentreString(weatherCondition, width / 2, cy*.75);
+  PrintCentreString(weatherCondition, width / 2, cy * .75);
   tft.setTextColor(ILI9341_WHITE);
   tft.setTextSize(2);
-  PrintCentreString(String(weatherTemp, 1) + "C", width / 2, cy*1.15);
+  PrintCentreString(String(weatherTemp, 1) + "C", width / 2, cy * 1.15);
 
   // Sensor buttons
 
@@ -548,7 +561,38 @@ void StartApp() {
 
 void ArduinoOTAInitializer() {
   ArduinoOTA.setHostname("Enviro_Touch");
+  ArduinoOTA.onStart([]() {
+    String type;
+    if (ArduinoOTA.getCommand() == U_FLASH) {
+      type = "sketch";
+    } else {  // U_FS
+      type = "filesystem";
+    }
 
+    // NOTE: if updating FS this would be the place to unmount FS using FS.end()
+    Serial.println("Start updating " + type);
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\nEnd");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Error[%u]: ", error);
+    if (error == OTA_AUTH_ERROR) {
+      Serial.println("Auth Failed");
+    } else if (error == OTA_BEGIN_ERROR) {
+      Serial.println("Begin Failed");
+    } else if (error == OTA_CONNECT_ERROR) {
+      Serial.println("Connect Failed");
+    } else if (error == OTA_RECEIVE_ERROR) {
+      Serial.println("Receive Failed");
+    } else if (error == OTA_END_ERROR) {
+      Serial.println("End Failed");
+    }
+  });
+  ArduinoOTA.begin();
   ArduinoOTA.begin();
 }
 
