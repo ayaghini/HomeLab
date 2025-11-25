@@ -2,10 +2,10 @@
 
 My kid came home asking for a **Yoto**, and it seemed like a great idea — so why not DIY it?  
 
-Update 1
+## Update 1 (2025-11-24)
 
-The first hardware version is now complete
-(/Images/IMG_8956.jpeg)
+The first hardware version is now complete, and my girl is all in love with it.
+![Kids Audio Player](/Images/IMG_8956.jpeg)
 
 If you want to build your own:
 
