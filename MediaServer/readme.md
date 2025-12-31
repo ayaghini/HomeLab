@@ -130,7 +130,48 @@ Reference:
 ---
 
 ## 🛠 Steps to Enable Quick Sync
+new aproach:
+nano start_arm_container.sh
 
+docker rm -f arm-rippers 2>/dev/null
+
+docker run -d \
+  -p "8080:8080" \
+  -e ARM_UID="1000" \
+  -e ARM_GID="1000" \
+  -e LIBVA_DRIVER_NAME="i965" \
+  -v "/home/arm:/home/arm" \
+  -v "/home/arm/music:/home/arm/music" \
+  -v "/home/arm/logs:/home/arm/logs" \
+  -v "/home/arm/media:/home/arm/media" \
+  -v "/home/arm/config:/etc/arm/config" \
+  --device="/dev/sr0:/dev/sr0" \
+  --device="/dev/sg0:/dev/sg0" \
+  --device="/dev/dri:/dev/dri" \
+  --group-add 44 \
+  --group-add 104 \
+  --restart "always" \
+  --name "arm-rippers" \
+  --cpuset-cpus='0-7' \
+  automaticrippingmachine/automatic-ripping-machine:latest
+
+
+edit arm.yaml:
+
+USE_FFMPEG: true
+
+FFMPEG_LOCAL: "/usr/bin/ffmpeg"
+FFMPEG_PRE_FILE_ARGS: "-hide_banner -y -analyzeduration 200M -probesize 200M -vaapi_device /dev/dri/renderD128"
+FFMPEG_POST_FILE_ARGS: "-map 0:v -map 0:a -map 0:s? -vf format=nv12,hwupload -c:v h264_vaapi -qp 23 -c:a copy -c:s copy"
+
+then run:
+docker exec -it arm-rippers bash -lc 'apt-get update && apt-get install -y i965-va-driver vainfo'
+
+then:
+docker restart arm-rippers
+
+
+below is the old one, it didnt work!
 ### 1. Create a Custom Dockerfile
 
 Inside the `arm` folder:

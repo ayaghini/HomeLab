@@ -70,7 +70,7 @@ If you see the **“Not in trusted domain”** error in NextCloud:
 
 ```bash
 sudo su
-cd /mnt/pool4tb/Applications/appdata/config/
+cd /mnt/pool4tb/Applications/nextCloud/appdata/config/
 nano config.php
 ```
 
