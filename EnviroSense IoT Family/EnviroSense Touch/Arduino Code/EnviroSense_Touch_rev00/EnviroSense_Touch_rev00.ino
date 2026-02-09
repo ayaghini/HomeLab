@@ -173,7 +173,7 @@ void publishDiscovery() {
     R"({"
     name":"ENVT_Temperature",
     "state_topic":"EnviroSenseTouch/ENVT_temperature",
-    "unit_of_measurement":"°C",
+    "unit_of_measurement":"C",
     "device_class":"temperature"
     })",
     true);
