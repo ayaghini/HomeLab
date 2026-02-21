@@ -38,6 +38,11 @@ Primary use cases:
 - The UI shall provide a more visually engaging layout with improved typography hierarchy, color palette, and iconography.
 - The UI shall include a clear status area for Wi-Fi/MQTT connectivity and sensor health.
 - The UI shall support smooth, non-blocking refreshes with partial redraws where possible to minimize flicker.
+- Touching a sensor tile shall switch to a 24-hour history view for that metric.
+- The history view shall display samples captured at 30-minute intervals (48 samples total).
+- Touching anywhere on the history view shall return to the main dashboard.
+- A touch calibration flow shall be available at boot: holding the screen during startup triggers calibration.
+- The calibration shall prompt for four-corner taps and persist calibration values across reboots.
 
 ### 3) Wi-Fi Connectivity
 - The device shall connect to a configured Wi-Fi network at boot.
@@ -67,7 +72,8 @@ Primary use cases:
 
 ### 7) Time Synchronization
 - The device shall obtain time using NTP (`pool.ntp.org`) and display local time.
-- The device shall use a configured UTC offset (default UTC-7) for display timing.
+- The device shall apply automatic Daylight Saving Time rules for the local timezone.
+- The device shall use a configured timezone rule (default Pacific Time: `PST8PDT,M3.2.0/2,M11.1.0/2`).
 
 ### 8) Weather Integration
 - The device shall optionally fetch weather data from OpenWeatherMap.
@@ -166,12 +172,15 @@ Primary use cases:
 - Keep the display awake while touch is detected and extend the override timer on any valid touch input.
 - Add a non-blocking Wi-Fi connection attempt with timeout and offline mode when credentials are not reachable.
 - Provide visible connectivity status indicators on the UI for Wi-Fi and MQTT.
+- Add a local on-device history buffer and history chart UI for 24-hour trends.
 
 ## Implementation Notes (Rev01)
 - Added visual refresh and UI theme improvements with a header/status area and 2x2 data tiles.
 - Implemented touch debounce and immediate display wake behavior.
 - Added Wi-Fi connection timeout with diagnostic reporting and offline continuation.
 - Added `secrets.example.h` template for safe sharing in GitHub.
+- Implemented on-device 24-hour history (30-minute sampling) with touch-to-view charts.
+- Added touch calibration routine (four-corner taps) with persistent storage and boot-time trigger.
 
 ## Out of Scope
 - Legacy 2020 Node-RED/InfluxDB/Grafana version located in `archive/`.

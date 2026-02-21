@@ -12,6 +12,8 @@
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
 #include "PubSubClient.h"  // Connect and publish to the MQTT broker
+#include <EEPROM.h>
+#include <time.h>
 
 //--WEMOS TFT 2.4 Touch----> https://www.wemos.cc/en/latest/d1_mini_shield/tft_2_4.html
 #include <Adafruit_GFX.h>
@@ -55,10 +57,13 @@ long previousMillis = updateTimeInterval;  // will store last time data was sent
 float displayThereshold = 20.0;
 
 //---------> NTP Client <---------------
-const long utcOffsetInSeconds = -25200;
+const long utcOffsetInSeconds = 0;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
 String timeToDisplay = "waiting to receive the time from server";
+tm localTimeInfo;
+bool hasLocalTime = false;
+const char* tzInfo = "PST8PDT,M3.2.0/2,M11.1.0/2";
 
 //---------> Weather Map API <---------
 WiFiClient client;
@@ -90,6 +95,47 @@ const unsigned long touchDebounceMs = 150;
 unsigned long lastTouchMs = 0;
 bool displayBlanked = false;
 bool uiInitialized = false;
+
+//---------> History View <---------
+const unsigned long historyIntervalMs = 30UL * 60UL * 1000UL;
+unsigned long lastHistorySampleMs = 0;
+const int HISTORY_SAMPLES = 48;  // 24 hours @ 30-minute intervals
+bool historyViewActive = false;
+bool historyDirty = true;
+int historyMetric = 0;  // 0=T,1=H,2=eCO2,3=TVOC
+
+struct HistorySeries {
+  float values[HISTORY_SAMPLES];
+  uint8_t count = 0;
+  uint8_t head = 0;
+};
+
+HistorySeries histTemp;
+HistorySeries histHum;
+HistorySeries histCO2;
+HistorySeries histTVOC;
+
+// Touch calibration (adjust if touch mapping is off)
+uint16_t tsMinX = 200;
+uint16_t tsMaxX = 3800;
+uint16_t tsMinY = 200;
+uint16_t tsMaxY = 3800;
+bool tsSwapXY = false;
+bool tsInvertX = false;
+bool tsInvertY = false;
+
+struct TouchCalData {
+  uint16_t magic;
+  uint16_t minX;
+  uint16_t maxX;
+  uint16_t minY;
+  uint16_t maxY;
+  uint8_t swapXY;
+  uint8_t invertX;
+  uint8_t invertY;
+};
+
+const uint16_t TOUCH_CAL_MAGIC = 0xCA1B;
 
 //---------> UI Styling <---------
 uint16_t COLOR_BG;
@@ -150,10 +196,21 @@ void SendMQTTMessages(const char* topic, String parameter);
 float Difrentiator(float a, float b);
 void Progressor(String in);
 String WeatherRequest();
+bool GetTouchPoint(int& x, int& y);
+void RecordHistoryIfDue();
+void HistoryPush(HistorySeries& series, float value);
+void RenderHistory();
+void DrawHistoryPlot(const HistorySeries& series, const char* title, const char* unit, uint16_t accent);
+bool LoadTouchCalibration();
+void SaveTouchCalibration(uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t maxY);
+void CheckCalibrationRequest();
+void CalibrateTouch();
+bool IsTouchInHeader();
 //--------------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
   InitializeDisplay();
+  CheckCalibrationRequest();
   InitializeWifi();
   isSgp = InitializeSgp();
   ArduinoOTAInitializer();
@@ -224,6 +281,7 @@ void StateMachine() {
     case 5:
       {
         UpdateDisplay();
+        RecordHistoryIfDue();
         state = 0;
         break;
       }
@@ -329,14 +387,48 @@ void HandleTouch() {
   lastTouchMs = now;
   touchOverrideTime = now;
 
-  // Read the touch point to clear the controller state and keep display awake.
-  if (ts.touched()) {
-    TS_Point p = ts.getPoint();
-    (void)p;
+  int tx = 0;
+  int ty = 0;
+  if (!GetTouchPoint(tx, ty)) {
+    return;
   }
 
-  // Force a refresh when waking the screen.
-  DisplayManager();
+  // Long-press header to recalibrate
+  if (ty <= HEADER_H && IsTouchInHeader()) {
+    CalibrateTouch();
+    uiInitialized = false;
+    DisplayManager();
+    return;
+  }
+
+  if (historyViewActive) {
+    historyViewActive = false;
+    uiInitialized = false;
+    DisplayManager();
+    return;
+  }
+
+  // Determine which tile was touched and switch to history view.
+  if (tx >= tileT.x && tx <= (tileT.x + tileT.w) && ty >= tileT.y && ty <= (tileT.y + tileT.h)) {
+    historyMetric = 0;
+    historyViewActive = true;
+  } else if (tx >= tileH.x && tx <= (tileH.x + tileH.w) && ty >= tileH.y && ty <= (tileH.y + tileH.h)) {
+    historyMetric = 1;
+    historyViewActive = true;
+  } else if (tx >= tileCO2.x && tx <= (tileCO2.x + tileCO2.w) && ty >= tileCO2.y && ty <= (tileCO2.y + tileCO2.h)) {
+    historyMetric = 2;
+    historyViewActive = true;
+  } else if (tx >= tileTVOC.x && tx <= (tileTVOC.x + tileTVOC.w) && ty >= tileTVOC.y && ty <= (tileTVOC.y + tileTVOC.h)) {
+    historyMetric = 3;
+    historyViewActive = true;
+  }
+
+  if (historyViewActive) {
+    historyDirty = true;
+    RenderHistory();
+  } else {
+    DisplayManager();
+  }
 
   // tft.fillScreen(ILI9341_BLACK);
   // tft.setCursor(0, 0);
@@ -351,7 +443,16 @@ void HandleTouch() {
 
 void UpdateTime() {
   timeClient.update();
-  timeToDisplay = timeClient.getFormattedTime();
+  time_t now = timeClient.getEpochTime();
+  if (localtime_r(&now, &localTimeInfo)) {
+    char buf[9];
+    strftime(buf, sizeof(buf), "%H:%M:%S", &localTimeInfo);
+    timeToDisplay = String(buf);
+    hasLocalTime = true;
+  } else {
+    timeToDisplay = timeClient.getFormattedTime();
+    hasLocalTime = false;
+  }
 }
 
 void MeasureSgp() {
@@ -418,7 +519,7 @@ void DrawWeatherIcon(int x, int y, int size, String condition) {
 }
 
 void DisplayManager() {
-  int hourNow = timeClient.getHours();
+  int hourNow = hasLocalTime ? localTimeInfo.tm_hour : timeClient.getHours();
   // Check if we are within the 5-second override window
   bool forceOn = (millis() - touchOverrideTime) < touchOverrideDuration;
 
@@ -433,6 +534,12 @@ void DisplayManager() {
   }
 
   displayBlanked = false;
+
+  if (historyViewActive) {
+    RenderHistory();
+    return;
+  }
+
   if (!uiInitialized) {
     RenderUIStatic();
     uiInitialized = true;
@@ -566,6 +673,305 @@ void DrawTileValue(const UiTile& tile, const String& value, const char* unit) {
   tft.print(unit);
 }
 
+bool GetTouchPoint(int& x, int& y) {
+  if (!ts.touched()) {
+    return false;
+  }
+
+  TS_Point p = ts.getPoint();
+  if (p.z < 200) {
+    return false;
+  }
+
+  int rawX = tsSwapXY ? p.y : p.x;
+  int rawY = tsSwapXY ? p.x : p.y;
+
+  int16_t sx;
+  int16_t sy;
+  if (tsInvertX) {
+    sx = map(rawX, tsMaxX, tsMinX, 0, tft.width() - 1);
+  } else {
+    sx = map(rawX, tsMinX, tsMaxX, 0, tft.width() - 1);
+  }
+  if (tsInvertY) {
+    sy = map(rawY, tsMaxY, tsMinY, 0, tft.height() - 1);
+  } else {
+    sy = map(rawY, tsMinY, tsMaxY, 0, tft.height() - 1);
+  }
+
+  if (sx < 0 || sy < 0 || sx >= tft.width() || sy >= tft.height()) {
+    return false;
+  }
+
+  x = sx;
+  y = sy;
+  return true;
+}
+
+bool LoadTouchCalibration() {
+  EEPROM.begin(64);
+  TouchCalData data;
+  EEPROM.get(0, data);
+  if (data.magic == TOUCH_CAL_MAGIC && data.minX < data.maxX && data.minY < data.maxY) {
+    tsMinX = data.minX;
+    tsMaxX = data.maxX;
+    tsMinY = data.minY;
+    tsMaxY = data.maxY;
+    tsSwapXY = data.swapXY;
+    tsInvertX = data.invertX;
+    tsInvertY = data.invertY;
+    return true;
+  }
+  return false;
+}
+
+void SaveTouchCalibration(uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t maxY) {
+  TouchCalData data;
+  data.magic = TOUCH_CAL_MAGIC;
+  data.minX = minX;
+  data.maxX = maxX;
+  data.minY = minY;
+  data.maxY = maxY;
+  data.swapXY = tsSwapXY ? 1 : 0;
+  data.invertX = tsInvertX ? 1 : 0;
+  data.invertY = tsInvertY ? 1 : 0;
+  EEPROM.put(0, data);
+  EEPROM.commit();
+  tsMinX = minX;
+  tsMaxX = maxX;
+  tsMinY = minY;
+  tsMaxY = maxY;
+}
+
+void CheckCalibrationRequest() {
+  bool hasCal = LoadTouchCalibration();
+  tft.fillScreen(COLOR_BG);
+  tft.setTextColor(COLOR_TEXT);
+  tft.setTextSize(2);
+  tft.setCursor(10, 20);
+  tft.print("Hold screen");
+  tft.setCursor(10, 40);
+  tft.print("to calibrate");
+
+  unsigned long start = millis();
+  bool touched = false;
+  while (millis() - start < 2000) {
+    if (ts.touched()) {
+      touched = true;
+      break;
+    }
+    delay(50);
+  }
+
+  if (touched || !hasCal) {
+    CalibrateTouch();
+  }
+
+  tft.fillScreen(COLOR_BG);
+}
+
+void CalibrateTouch() {
+  uint16_t minX = 4095;
+  uint16_t maxX = 0;
+  uint16_t minY = 4095;
+  uint16_t maxY = 0;
+
+  struct RawPoint {
+    uint16_t x;
+    uint16_t y;
+  };
+
+  auto readPoint = [&](int targetX, int targetY) -> RawPoint {
+    tft.fillScreen(COLOR_BG);
+    tft.drawLine(targetX - 8, targetY, targetX + 8, targetY, COLOR_ACCENT_T);
+    tft.drawLine(targetX, targetY - 8, targetX, targetY + 8, COLOR_ACCENT_T);
+    tft.setTextColor(COLOR_SUBTEXT);
+    tft.setTextSize(1);
+    tft.setCursor(10, tft.height() - 10);
+    tft.print("Tap the cross");
+
+    while (!ts.touched()) {
+      delay(10);
+    }
+
+    TS_Point p = ts.getPoint();
+    RawPoint rp = {(uint16_t)p.x, (uint16_t)p.y};
+
+    while (ts.touched()) {
+      delay(10);
+    }
+    return rp;
+  };
+
+  int w = tft.width();
+  int h = tft.height();
+  RawPoint tl = readPoint(20, 20);
+  RawPoint tr = readPoint(w - 20, 20);
+  RawPoint bl = readPoint(20, h - 20);
+
+  int dx = abs((int)tr.x - (int)tl.x);
+  int dy = abs((int)tr.y - (int)tl.y);
+  tsSwapXY = (dx < dy);
+
+  auto axisX = [&](const RawPoint& p) -> uint16_t { return tsSwapXY ? p.y : p.x; };
+  auto axisY = [&](const RawPoint& p) -> uint16_t { return tsSwapXY ? p.x : p.y; };
+
+  uint16_t axTL = axisX(tl);
+  uint16_t axTR = axisX(tr);
+  uint16_t axBL = axisX(bl);
+  uint16_t ayTL = axisY(tl);
+  uint16_t ayTR = axisY(tr);
+  uint16_t ayBL = axisY(bl);
+
+  minX = min(axTL, min(axTR, axBL));
+  maxX = max(axTL, max(axTR, axBL));
+  minY = min(ayTL, min(ayTR, ayBL));
+  maxY = max(ayTL, max(ayTR, ayBL));
+
+  tsInvertX = (axTL > axTR);
+  tsInvertY = (ayTL > ayBL);
+
+  if (minX < maxX && minY < maxY) {
+    SaveTouchCalibration(minX, maxX, minY, maxY);
+  }
+}
+
+bool IsTouchInHeader() {
+  // Require a long-press (~1.5s) in header to trigger calibration.
+  unsigned long start = millis();
+  while (millis() - start < 1500) {
+    if (!ts.touched()) {
+      return false;
+    }
+    delay(20);
+  }
+  return true;
+}
+
+void RecordHistoryIfDue() {
+  unsigned long now = millis();
+  if (lastHistorySampleMs == 0 || (now - lastHistorySampleMs) >= historyIntervalMs) {
+    lastHistorySampleMs = now;
+    HistoryPush(histTemp, temp);
+    HistoryPush(histHum, humid);
+    HistoryPush(histCO2, eCo2);
+    HistoryPush(histTVOC, tVoc);
+    historyDirty = true;
+  }
+}
+
+void HistoryPush(HistorySeries& series, float value) {
+  series.values[series.head] = value;
+  series.head = (series.head + 1) % HISTORY_SAMPLES;
+  if (series.count < HISTORY_SAMPLES) {
+    series.count++;
+  }
+}
+
+void RenderHistory() {
+  if (!historyDirty) {
+    return;
+  }
+
+  historyDirty = false;
+  tft.fillScreen(COLOR_BG);
+
+  switch (historyMetric) {
+    case 0:
+      DrawHistoryPlot(histTemp, "Temp - Last 24h", "C", COLOR_ACCENT_T);
+      break;
+    case 1:
+      DrawHistoryPlot(histHum, "Humidity - Last 24h", "%", COLOR_ACCENT_H);
+      break;
+    case 2:
+      DrawHistoryPlot(histCO2, "eCO2 - Last 24h", "ppm", COLOR_ACCENT_CO2);
+      break;
+    case 3:
+    default:
+      DrawHistoryPlot(histTVOC, "TVOC - Last 24h", "ppb", COLOR_ACCENT_TVOC);
+      break;
+  }
+
+  // Footer hint
+  tft.setTextColor(COLOR_SUBTEXT);
+  tft.setTextSize(1);
+  tft.setCursor(6, tft.height() - 10);
+  tft.print("Tap anywhere to return");
+}
+
+void DrawHistoryPlot(const HistorySeries& series, const char* title, const char* unit, uint16_t accent) {
+  int w = tft.width();
+  int h = tft.height();
+  int margin = 12;
+  int top = 20;
+  int bottom = h - 20;
+  int left = margin;
+  int right = w - margin;
+
+  tft.setTextColor(COLOR_TEXT);
+  tft.setTextSize(2);
+  tft.setCursor(6, 2);
+  tft.print(title);
+
+  tft.drawRect(left, top, right - left, bottom - top, tft.color565(40, 50, 70));
+
+  if (series.count == 0) {
+    tft.setTextColor(COLOR_SUBTEXT);
+    tft.setTextSize(1);
+    tft.setCursor(left + 6, top + 10);
+    tft.print("Collecting samples...");
+    return;
+  }
+
+  // Determine min/max
+  float minV = series.values[0];
+  float maxV = series.values[0];
+  for (uint8_t i = 0; i < series.count; i++) {
+    float v = series.values[i];
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+  }
+  if (minV == maxV) {
+    maxV = minV + 1.0f;
+  }
+
+  // Plot from oldest to newest
+  int plotW = right - left - 2;
+  int plotH = bottom - top - 2;
+  int samples = series.count;
+
+  int start = (series.head + HISTORY_SAMPLES - series.count) % HISTORY_SAMPLES;
+  int prevX = -1;
+  int prevY = -1;
+  if (samples == 1) {
+    int x = left + 1 + plotW / 2;
+    int y = bottom - 2 - (int)(((series.values[start] - minV) / (maxV - minV)) * plotH);
+    tft.fillCircle(x, y, 2, accent);
+  } else {
+    for (int i = 0; i < samples; i++) {
+    int idx = (start + i) % HISTORY_SAMPLES;
+    float v = series.values[idx];
+    float norm = (v - minV) / (maxV - minV);
+    int x = left + 1 + (plotW * i) / (samples - 1);
+    int y = bottom - 2 - (int)(norm * plotH);
+
+    if (prevX >= 0) {
+      tft.drawLine(prevX, prevY, x, y, accent);
+    }
+    prevX = x;
+    prevY = y;
+    }
+  }
+
+  // Min/Max labels
+  tft.setTextColor(COLOR_SUBTEXT);
+  tft.setTextSize(1);
+  tft.setCursor(left, bottom + 4);
+  tft.print(String(minV, 1) + unit);
+  tft.setCursor(right - 40, bottom + 4);
+  tft.print(String(maxV, 1) + unit);
+}
+
 void DrawSensorButton(int x, int y, int cx, int cy, String label, String value, uint16_t color) {
   int r = 8;  // rounded corners
   int t = 4;  // inner padding
@@ -689,6 +1095,7 @@ void InitializeDisplay() {
   tft.setTextSize(3);
   tft.println("EnviroSense Touch");
   tft.println("A. Yaghini");
+  LoadTouchCalibration();
 }
 
 void InitializeWifi() {
@@ -754,6 +1161,8 @@ void Progressor(String in) {
 void StartApp() {
   Progressor("Time");
   timeClient.begin();
+  setenv("TZ", tzInfo, 1);
+  tzset();
   tft.setTextColor(ILI9341_GREEN);
   tft.println("  ok");
   tft.setTextColor(ILI9341_WHITE);
