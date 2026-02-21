@@ -12,6 +12,7 @@
 #include <ArduinoOTA.h>
 #include <ArduinoJson.h>
 #include "PubSubClient.h"  // Connect and publish to the MQTT broker
+#include <EEPROM.h>
 
 //--WEMOS TFT 2.4 Touch----> https://www.wemos.cc/en/latest/d1_mini_shield/tft_2_4.html
 #include <Adafruit_GFX.h>
@@ -111,10 +112,20 @@ HistorySeries histCO2;
 HistorySeries histTVOC;
 
 // Touch calibration (adjust if touch mapping is off)
-const int TS_MINX = 200;
-const int TS_MAXX = 3800;
-const int TS_MINY = 200;
-const int TS_MAXY = 3800;
+uint16_t tsMinX = 200;
+uint16_t tsMaxX = 3800;
+uint16_t tsMinY = 200;
+uint16_t tsMaxY = 3800;
+
+struct TouchCalData {
+  uint16_t magic;
+  uint16_t minX;
+  uint16_t maxX;
+  uint16_t minY;
+  uint16_t maxY;
+};
+
+const uint16_t TOUCH_CAL_MAGIC = 0xCA1B;
 
 //---------> UI Styling <---------
 uint16_t COLOR_BG;
@@ -180,10 +191,15 @@ void RecordHistoryIfDue();
 void HistoryPush(HistorySeries& series, float value);
 void RenderHistory();
 void DrawHistoryPlot(const HistorySeries& series, const char* title, const char* unit, uint16_t accent);
+bool LoadTouchCalibration();
+void SaveTouchCalibration(uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t maxY);
+void CheckCalibrationRequest();
+void CalibrateTouch();
 //--------------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
   InitializeDisplay();
+  CheckCalibrationRequest();
   InitializeWifi();
   isSgp = InitializeSgp();
   ArduinoOTAInitializer();
@@ -639,8 +655,8 @@ bool GetTouchPoint(int& x, int& y) {
     return false;
   }
 
-  int16_t sx = map(p.y, TS_MINY, TS_MAXY, 0, tft.width());
-  int16_t sy = map(p.x, TS_MINX, TS_MAXX, 0, tft.height());
+  int16_t sx = map(p.y, tsMinY, tsMaxY, 0, tft.width());
+  int16_t sy = map(p.x, tsMinX, tsMaxX, 0, tft.height());
 
   if (sx < 0 || sy < 0 || sx >= tft.width() || sy >= tft.height()) {
     return false;
@@ -649,6 +665,104 @@ bool GetTouchPoint(int& x, int& y) {
   x = sx;
   y = sy;
   return true;
+}
+
+bool LoadTouchCalibration() {
+  EEPROM.begin(64);
+  TouchCalData data;
+  EEPROM.get(0, data);
+  if (data.magic == TOUCH_CAL_MAGIC && data.minX < data.maxX && data.minY < data.maxY) {
+    tsMinX = data.minX;
+    tsMaxX = data.maxX;
+    tsMinY = data.minY;
+    tsMaxY = data.maxY;
+    return true;
+  }
+  return false;
+}
+
+void SaveTouchCalibration(uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t maxY) {
+  TouchCalData data;
+  data.magic = TOUCH_CAL_MAGIC;
+  data.minX = minX;
+  data.maxX = maxX;
+  data.minY = minY;
+  data.maxY = maxY;
+  EEPROM.put(0, data);
+  EEPROM.commit();
+  tsMinX = minX;
+  tsMaxX = maxX;
+  tsMinY = minY;
+  tsMaxY = maxY;
+}
+
+void CheckCalibrationRequest() {
+  bool hasCal = LoadTouchCalibration();
+  tft.fillScreen(COLOR_BG);
+  tft.setTextColor(COLOR_TEXT);
+  tft.setTextSize(2);
+  tft.setCursor(10, 20);
+  tft.print("Hold screen");
+  tft.setCursor(10, 40);
+  tft.print("to calibrate");
+
+  unsigned long start = millis();
+  bool touched = false;
+  while (millis() - start < 2000) {
+    if (ts.touched()) {
+      touched = true;
+      break;
+    }
+    delay(50);
+  }
+
+  if (touched || !hasCal) {
+    CalibrateTouch();
+  }
+
+  tft.fillScreen(COLOR_BG);
+}
+
+void CalibrateTouch() {
+  uint16_t minX = 4095;
+  uint16_t maxX = 0;
+  uint16_t minY = 4095;
+  uint16_t maxY = 0;
+
+  auto readPoint = [&](int targetX, int targetY) {
+    tft.fillScreen(COLOR_BG);
+    tft.drawLine(targetX - 8, targetY, targetX + 8, targetY, COLOR_ACCENT_T);
+    tft.drawLine(targetX, targetY - 8, targetX, targetY + 8, COLOR_ACCENT_T);
+    tft.setTextColor(COLOR_SUBTEXT);
+    tft.setTextSize(1);
+    tft.setCursor(10, tft.height() - 10);
+    tft.print("Tap the cross");
+
+    while (!ts.touched()) {
+      delay(10);
+    }
+
+    TS_Point p = ts.getPoint();
+    minX = min(minX, (uint16_t)p.x);
+    maxX = max(maxX, (uint16_t)p.x);
+    minY = min(minY, (uint16_t)p.y);
+    maxY = max(maxY, (uint16_t)p.y);
+
+    while (ts.touched()) {
+      delay(10);
+    }
+  };
+
+  int w = tft.width();
+  int h = tft.height();
+  readPoint(20, 20);
+  readPoint(w - 20, 20);
+  readPoint(20, h - 20);
+  readPoint(w - 20, h - 20);
+
+  if (minX < maxX && minY < maxY) {
+    SaveTouchCalibration(minX, maxX, minY, maxY);
+  }
 }
 
 void RecordHistoryIfDue() {
@@ -898,6 +1012,7 @@ void InitializeDisplay() {
   tft.setTextSize(3);
   tft.println("EnviroSense Touch");
   tft.println("A. Yaghini");
+  LoadTouchCalibration();
 }
 
 void InitializeWifi() {

@@ -41,6 +41,8 @@ Primary use cases:
 - Touching a sensor tile shall switch to a 24-hour history view for that metric.
 - The history view shall display samples captured at 30-minute intervals (48 samples total).
 - Touching anywhere on the history view shall return to the main dashboard.
+- A touch calibration flow shall be available at boot: holding the screen during startup triggers calibration.
+- The calibration shall prompt for four-corner taps and persist calibration values across reboots.
 
 ### 3) Wi-Fi Connectivity
 - The device shall connect to a configured Wi-Fi network at boot.
@@ -177,6 +179,7 @@ Primary use cases:
 - Added Wi-Fi connection timeout with diagnostic reporting and offline continuation.
 - Added `secrets.example.h` template for safe sharing in GitHub.
 - Implemented on-device 24-hour history (30-minute sampling) with touch-to-view charts.
+- Added touch calibration routine (four-corner taps) with persistent storage and boot-time trigger.
 
 ## Out of Scope
 - Legacy 2020 Node-RED/InfluxDB/Grafana version located in `archive/`.
