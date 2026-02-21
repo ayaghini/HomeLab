@@ -72,7 +72,8 @@ Primary use cases:
 
 ### 7) Time Synchronization
 - The device shall obtain time using NTP (`pool.ntp.org`) and display local time.
-- The device shall use a configured UTC offset (default UTC-7) for display timing.
+- The device shall apply automatic Daylight Saving Time rules for the local timezone.
+- The device shall use a configured timezone rule (default Pacific Time: `PST8PDT,M3.2.0/2,M11.1.0/2`).
 
 ### 8) Weather Integration
 - The device shall optionally fetch weather data from OpenWeatherMap.

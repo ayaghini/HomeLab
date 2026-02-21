@@ -13,6 +13,7 @@
 #include <ArduinoJson.h>
 #include "PubSubClient.h"  // Connect and publish to the MQTT broker
 #include <EEPROM.h>
+#include <time.h>
 
 //--WEMOS TFT 2.4 Touch----> https://www.wemos.cc/en/latest/d1_mini_shield/tft_2_4.html
 #include <Adafruit_GFX.h>
@@ -56,10 +57,13 @@ long previousMillis = updateTimeInterval;  // will store last time data was sent
 float displayThereshold = 20.0;
 
 //---------> NTP Client <---------------
-const long utcOffsetInSeconds = -25200;
+const long utcOffsetInSeconds = 0;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
 String timeToDisplay = "waiting to receive the time from server";
+tm localTimeInfo;
+bool hasLocalTime = false;
+const char* tzInfo = "PST8PDT,M3.2.0/2,M11.1.0/2";
 
 //---------> Weather Map API <---------
 WiFiClient client;
@@ -439,7 +443,16 @@ void HandleTouch() {
 
 void UpdateTime() {
   timeClient.update();
-  timeToDisplay = timeClient.getFormattedTime();
+  time_t now = timeClient.getEpochTime();
+  if (localtime_r(&now, &localTimeInfo)) {
+    char buf[9];
+    strftime(buf, sizeof(buf), "%H:%M:%S", &localTimeInfo);
+    timeToDisplay = String(buf);
+    hasLocalTime = true;
+  } else {
+    timeToDisplay = timeClient.getFormattedTime();
+    hasLocalTime = false;
+  }
 }
 
 void MeasureSgp() {
@@ -506,7 +519,7 @@ void DrawWeatherIcon(int x, int y, int size, String condition) {
 }
 
 void DisplayManager() {
-  int hourNow = timeClient.getHours();
+  int hourNow = hasLocalTime ? localTimeInfo.tm_hour : timeClient.getHours();
   // Check if we are within the 5-second override window
   bool forceOn = (millis() - touchOverrideTime) < touchOverrideDuration;
 
@@ -1148,6 +1161,8 @@ void Progressor(String in) {
 void StartApp() {
   Progressor("Time");
   timeClient.begin();
+  setenv("TZ", tzInfo, 1);
+  tzset();
   tft.setTextColor(ILI9341_GREEN);
   tft.println("  ok");
   tft.setTextColor(ILI9341_WHITE);
