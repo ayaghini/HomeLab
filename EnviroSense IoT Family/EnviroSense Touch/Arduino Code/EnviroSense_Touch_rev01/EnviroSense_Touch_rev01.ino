@@ -116,6 +116,9 @@ uint16_t tsMinX = 200;
 uint16_t tsMaxX = 3800;
 uint16_t tsMinY = 200;
 uint16_t tsMaxY = 3800;
+bool tsSwapXY = false;
+bool tsInvertX = false;
+bool tsInvertY = false;
 
 struct TouchCalData {
   uint16_t magic;
@@ -123,6 +126,9 @@ struct TouchCalData {
   uint16_t maxX;
   uint16_t minY;
   uint16_t maxY;
+  uint8_t swapXY;
+  uint8_t invertX;
+  uint8_t invertY;
 };
 
 const uint16_t TOUCH_CAL_MAGIC = 0xCA1B;
@@ -195,6 +201,7 @@ bool LoadTouchCalibration();
 void SaveTouchCalibration(uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t maxY);
 void CheckCalibrationRequest();
 void CalibrateTouch();
+bool IsTouchInHeader();
 //--------------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
@@ -379,6 +386,14 @@ void HandleTouch() {
   int tx = 0;
   int ty = 0;
   if (!GetTouchPoint(tx, ty)) {
+    return;
+  }
+
+  // Long-press header to recalibrate
+  if (ty <= HEADER_H && IsTouchInHeader()) {
+    CalibrateTouch();
+    uiInitialized = false;
+    DisplayManager();
     return;
   }
 
@@ -655,8 +670,21 @@ bool GetTouchPoint(int& x, int& y) {
     return false;
   }
 
-  int16_t sx = map(p.y, tsMinY, tsMaxY, 0, tft.width());
-  int16_t sy = map(p.x, tsMinX, tsMaxX, 0, tft.height());
+  int rawX = tsSwapXY ? p.y : p.x;
+  int rawY = tsSwapXY ? p.x : p.y;
+
+  int16_t sx;
+  int16_t sy;
+  if (tsInvertX) {
+    sx = map(rawX, tsMaxX, tsMinX, 0, tft.width() - 1);
+  } else {
+    sx = map(rawX, tsMinX, tsMaxX, 0, tft.width() - 1);
+  }
+  if (tsInvertY) {
+    sy = map(rawY, tsMaxY, tsMinY, 0, tft.height() - 1);
+  } else {
+    sy = map(rawY, tsMinY, tsMaxY, 0, tft.height() - 1);
+  }
 
   if (sx < 0 || sy < 0 || sx >= tft.width() || sy >= tft.height()) {
     return false;
@@ -676,6 +704,9 @@ bool LoadTouchCalibration() {
     tsMaxX = data.maxX;
     tsMinY = data.minY;
     tsMaxY = data.maxY;
+    tsSwapXY = data.swapXY;
+    tsInvertX = data.invertX;
+    tsInvertY = data.invertY;
     return true;
   }
   return false;
@@ -688,6 +719,9 @@ void SaveTouchCalibration(uint16_t minX, uint16_t maxX, uint16_t minY, uint16_t 
   data.maxX = maxX;
   data.minY = minY;
   data.maxY = maxY;
+  data.swapXY = tsSwapXY ? 1 : 0;
+  data.invertX = tsInvertX ? 1 : 0;
+  data.invertY = tsInvertY ? 1 : 0;
   EEPROM.put(0, data);
   EEPROM.commit();
   tsMinX = minX;
@@ -729,7 +763,12 @@ void CalibrateTouch() {
   uint16_t minY = 4095;
   uint16_t maxY = 0;
 
-  auto readPoint = [&](int targetX, int targetY) {
+  struct RawPoint {
+    uint16_t x;
+    uint16_t y;
+  };
+
+  auto readPoint = [&](int targetX, int targetY) -> RawPoint {
     tft.fillScreen(COLOR_BG);
     tft.drawLine(targetX - 8, targetY, targetX + 8, targetY, COLOR_ACCENT_T);
     tft.drawLine(targetX, targetY - 8, targetX, targetY + 8, COLOR_ACCENT_T);
@@ -743,26 +782,57 @@ void CalibrateTouch() {
     }
 
     TS_Point p = ts.getPoint();
-    minX = min(minX, (uint16_t)p.x);
-    maxX = max(maxX, (uint16_t)p.x);
-    minY = min(minY, (uint16_t)p.y);
-    maxY = max(maxY, (uint16_t)p.y);
+    RawPoint rp = {(uint16_t)p.x, (uint16_t)p.y};
 
     while (ts.touched()) {
       delay(10);
     }
+    return rp;
   };
 
   int w = tft.width();
   int h = tft.height();
-  readPoint(20, 20);
-  readPoint(w - 20, 20);
-  readPoint(20, h - 20);
-  readPoint(w - 20, h - 20);
+  RawPoint tl = readPoint(20, 20);
+  RawPoint tr = readPoint(w - 20, 20);
+  RawPoint bl = readPoint(20, h - 20);
+
+  int dx = abs((int)tr.x - (int)tl.x);
+  int dy = abs((int)tr.y - (int)tl.y);
+  tsSwapXY = (dx < dy);
+
+  auto axisX = [&](const RawPoint& p) -> uint16_t { return tsSwapXY ? p.y : p.x; };
+  auto axisY = [&](const RawPoint& p) -> uint16_t { return tsSwapXY ? p.x : p.y; };
+
+  uint16_t axTL = axisX(tl);
+  uint16_t axTR = axisX(tr);
+  uint16_t axBL = axisX(bl);
+  uint16_t ayTL = axisY(tl);
+  uint16_t ayTR = axisY(tr);
+  uint16_t ayBL = axisY(bl);
+
+  minX = min(axTL, min(axTR, axBL));
+  maxX = max(axTL, max(axTR, axBL));
+  minY = min(ayTL, min(ayTR, ayBL));
+  maxY = max(ayTL, max(ayTR, ayBL));
+
+  tsInvertX = (axTL > axTR);
+  tsInvertY = (ayTL > ayBL);
 
   if (minX < maxX && minY < maxY) {
     SaveTouchCalibration(minX, maxX, minY, maxY);
   }
+}
+
+bool IsTouchInHeader() {
+  // Require a long-press (~1.5s) in header to trigger calibration.
+  unsigned long start = millis();
+  while (millis() - start < 1500) {
+    if (!ts.touched()) {
+      return false;
+    }
+    delay(20);
+  }
+  return true;
 }
 
 void RecordHistoryIfDue() {
