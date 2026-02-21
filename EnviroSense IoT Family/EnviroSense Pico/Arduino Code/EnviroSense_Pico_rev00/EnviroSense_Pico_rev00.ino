@@ -36,6 +36,17 @@ const char* TOPIC_AVAIL = "EnviroSense/status";
 #define TFT_SCLK D5  // Clock out
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
+// UI colors
+uint16_t UI_BG;
+uint16_t UI_PANEL;
+uint16_t UI_TEXT;
+uint16_t UI_SUBTEXT;
+uint16_t UI_ACCENT_T;
+uint16_t UI_ACCENT_H;
+uint16_t UI_ACCENT_P;
+uint16_t UI_ACCENT_G;
+uint16_t UI_ACCENT_A;
+
 // Last displayed values
 float lastTemperature = NAN;
 float lastHumidity = NAN;
@@ -69,14 +80,16 @@ unsigned long lastSensorRead = 0;
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastMqttUpdate = 0;
 unsigned long lastMqttAttempt = 0;
+unsigned long lastWiFiAttempt = 0;
 const unsigned long displayInterval = 2000;
-const unsigned long mqttInterval = 10000;
+const unsigned long mqttInterval = 60000;
 const unsigned long mqttReconnectInterval = 5000;
+const unsigned long wifiReconnectInterval = 15000;
 
 // -------------------- Display Layout --------------------
 const int SCREEN_W = 160;
 const int SCREEN_H = 80;
-const int HEADER_H = 12;
+const int HEADER_H = 14;
 const int CELL_W = 80;
 const int CELL_H = 22;
 
@@ -101,56 +114,74 @@ void publishDiscovery() {
                R"(","sw":")" + SW_VERSION + R"("})";
 
   // Temperature
-  mqttClient.publish("homeassistant/sensor/enviroSense_temperature/config",
-    R"({
-      "name": "Temperature",
-      "unique_id": "enviroSense_temperature",
-      "state_topic": "EnviroSense/temperature",
-      "unit_of_measurement": "°C",
-      "device_class": "temperature",
-      "availability_topic": "EnviroSense/status"
-    })", true);
+  String tempCfg = String(R"({")")
+    + R"("name":"EnviroSense Temperature",)"
+    + R"("unique_id":")" + unique + R"(_temperature",)"
+    + R"("state_topic":"EnviroSense/temperature",)"
+    + R"("unit_of_measurement":"°C",)"
+    + R"("device_class":"temperature",)"
+    + R"("state_class":"measurement",)"
+    + R"("availability_topic":"EnviroSense/status",)"
+    + R"("payload_available":"online",)"
+    + R"("payload_not_available":"offline",)"
+    + R"("device":)" + dev
+    + R"(})";
+  mqttClient.publish("homeassistant/sensor/enviroSense_temperature/config", tempCfg.c_str(), true);
 
   // Humidity
-  mqttClient.publish("homeassistant/sensor/enviroSense_humidity/config",
-    R"({
-      "name": "Humidity",
-      "unique_id": "enviroSense_humidity",
-      "state_topic": "EnviroSense/humidity",
-      "unit_of_measurement": "%",
-      "device_class": "humidity",
-      "availability_topic": "EnviroSense/status"
-    })", true);
+  String humCfg = String(R"({")")
+    + R"("name":"EnviroSense Humidity",)"
+    + R"("unique_id":")" + unique + R"(_humidity",)"
+    + R"("state_topic":"EnviroSense/humidity",)"
+    + R"("unit_of_measurement":"%",)"
+    + R"("device_class":"humidity",)"
+    + R"("state_class":"measurement",)"
+    + R"("availability_topic":"EnviroSense/status",)"
+    + R"("payload_available":"online",)"
+    + R"("payload_not_available":"offline",)"
+    + R"("device":)" + dev
+    + R"(})";
+  mqttClient.publish("homeassistant/sensor/enviroSense_humidity/config", humCfg.c_str(), true);
 
   // Pressure
-  mqttClient.publish("homeassistant/sensor/enviroSense_pressure/config",
-    R"({
-      "name": "Pressure",
-      "unique_id": "enviroSense_pressure",
-      "state_topic": "EnviroSense/pressure",
-      "unit_of_measurement": "hPa",
-      "device_class": "pressure",
-      "availability_topic": "EnviroSense/status"
-    })", true);
+  String presCfg = String(R"({")")
+    + R"("name":"EnviroSense Pressure",)"
+    + R"("unique_id":")" + unique + R"(_pressure",)"
+    + R"("state_topic":"EnviroSense/pressure",)"
+    + R"("unit_of_measurement":"hPa",)"
+    + R"("device_class":"pressure",)"
+    + R"("state_class":"measurement",)"
+    + R"("availability_topic":"EnviroSense/status",)"
+    + R"("payload_available":"online",)"
+    + R"("payload_not_available":"offline",)"
+    + R"("device":)" + dev
+    + R"(})";
+  mqttClient.publish("homeassistant/sensor/enviroSense_pressure/config", presCfg.c_str(), true);
 
   // Gas
-  mqttClient.publish("homeassistant/sensor/enviroSense_gas/config",
-    R"({
-      "name": "Gas",
-      "unique_id": "enviroSense_gas",
-      "state_topic": "EnviroSense/gas",
-      "unit_of_measurement": "Ohm",
-      "availability_topic": "EnviroSense/status"
-    })", true);
+  String gasCfg = String(R"({")")
+    + R"("name":"EnviroSense Gas",)"
+    + R"("unique_id":")" + unique + R"(_gas",)"
+    + R"("state_topic":"EnviroSense/gas",)"
+    + R"("unit_of_measurement":"Ohm",)"
+    + R"("availability_topic":"EnviroSense/status",)"
+    + R"("payload_available":"online",)"
+    + R"("payload_not_available":"offline",)"
+    + R"("device":)" + dev
+    + R"(})";
+  mqttClient.publish("homeassistant/sensor/enviroSense_gas/config", gasCfg.c_str(), true);
 
   // AQI
-  mqttClient.publish("homeassistant/sensor/enviroSense_aqi/config",
-    R"({
-      "name": "AQI",
-      "unique_id": "enviroSense_aqi",
-      "state_topic": "EnviroSense/aqi",
-      "availability_topic": "EnviroSense/status"
-    })", true);
+  String aqiCfg = String(R"({")")
+    + R"("name":"EnviroSense AQI",)"
+    + R"("unique_id":")" + unique + R"(_aqi",)"
+    + R"("state_topic":"EnviroSense/aqi",)"
+    + R"("availability_topic":"EnviroSense/status",)"
+    + R"("payload_available":"online",)"
+    + R"("payload_not_available":"offline",)"
+    + R"("device":)" + dev
+    + R"(})";
+  mqttClient.publish("homeassistant/sensor/enviroSense_aqi/config", aqiCfg.c_str(), true);
 }
 
 
@@ -225,38 +256,47 @@ void readBME680() {
 }
 
 // -------------------- Display --------------------
-void drawHeader(bool wifiOk, bool mqttOk) {
-  tft.fillRect(0, 0, SCREEN_W, HEADER_H, ST77XX_BLACK);
-  tft.setCursor(2, 2);
-  tft.setTextColor(ST77XX_WHITE);
-  tft.setTextSize(1);
-  tft.print("EnviroSense");
+void initUiColors() {
+  UI_BG = tft.color565(10, 14, 24);
+  UI_PANEL = tft.color565(18, 24, 40);
+  UI_TEXT = ST77XX_WHITE;
+  UI_SUBTEXT = tft.color565(150, 160, 180);
+  UI_ACCENT_T = tft.color565(255, 120, 60);
+  UI_ACCENT_H = tft.color565(80, 200, 210);
+  UI_ACCENT_P = tft.color565(120, 180, 255);
+  UI_ACCENT_G = tft.color565(120, 140, 255);
+  UI_ACCENT_A = tft.color565(140, 255, 120);
+}
 
-  tft.setCursor(110, 2);
-  tft.setTextColor(wifiOk ? ST77XX_GREEN : ST77XX_RED);
-  tft.print("W");
-  tft.setCursor(125, 2);
-  tft.setTextColor(mqttOk ? ST77XX_GREEN : ST77XX_RED);
-  tft.print("M");
+void drawHeader(bool wifiOk, bool mqttOk) {
+  tft.fillRect(0, 0, SCREEN_W, HEADER_H, UI_PANEL);
+  tft.setCursor(4, 3);
+  tft.setTextColor(UI_TEXT);
+  tft.setTextSize(1);
+  tft.print("EnviroSense Pico");
+
+  // Status dots
+  tft.fillCircle(142, 6, 3, wifiOk ? ST77XX_GREEN : ST77XX_RED);
+  tft.fillCircle(152, 6, 3, mqttOk ? ST77XX_GREEN : ST77XX_RED);
 }
 
 void drawGrid() {
-  tft.drawFastHLine(0, HEADER_H, SCREEN_W, ST77XX_DARKGREY);
-  tft.drawFastHLine(0, HEADER_H + CELL_H, SCREEN_W, ST77XX_DARKGREY);
-  tft.drawFastHLine(0, HEADER_H + CELL_H * 2, SCREEN_W, ST77XX_DARKGREY);
-  tft.drawFastVLine(CELL_W, HEADER_H, SCREEN_H - HEADER_H, ST77XX_DARKGREY);
+  tft.drawFastHLine(0, HEADER_H, SCREEN_W, tft.color565(40, 50, 70));
+  tft.drawFastHLine(0, HEADER_H + CELL_H, SCREEN_W, tft.color565(40, 50, 70));
+  tft.drawFastHLine(0, HEADER_H + CELL_H * 2, SCREEN_W, tft.color565(40, 50, 70));
+  tft.drawFastVLine(CELL_W, HEADER_H, SCREEN_H - HEADER_H, tft.color565(40, 50, 70));
 }
 
 void drawCellLabel(const Cell& cell) {
-  tft.setCursor(cell.x + 2, cell.y + 2);
-  tft.setTextColor(ST77XX_WHITE);
+  tft.setCursor(cell.x + 4, cell.y + 3);
+  tft.setTextColor(UI_SUBTEXT);
   tft.setTextSize(1);
   tft.print(cell.label);
 }
 
 void drawCellValue(const Cell& cell, const String& value, uint16_t color) {
-  tft.fillRect(cell.x, cell.y + 10, CELL_W, CELL_H - 10, ST77XX_BLACK);
-  tft.setCursor(cell.x + 2, cell.y + 12);
+  tft.fillRect(cell.x + 2, cell.y + 12, CELL_W - 4, CELL_H - 12, UI_BG);
+  tft.setCursor(cell.x + 4, cell.y + 13);
   tft.setTextColor(color);
   tft.setTextSize(1);
   tft.print(value);
@@ -264,9 +304,10 @@ void drawCellValue(const Cell& cell, const String& value, uint16_t color) {
 
 void setupDisplay() {
   tft.initR(INITR_MINI160x80);   // Initialize ST7735
-  tft.fillScreen(ST77XX_BLACK);
-  tft.setRotation(1);          // Adjust rotation if needed
+  tft.setRotation(1);
   tft.invertDisplay(true);
+  initUiColors();
+  tft.fillScreen(UI_BG);
   drawHeader(false, false);
   drawGrid();
   drawCellLabel(CELL_TEMP);
@@ -311,12 +352,12 @@ void updateDisplay() {
     lastMqtt = mqttOk;
   }
 
-  drawCellValue(CELL_TEMP, String(temperature, 1) + " C", ST77XX_RED);
-  drawCellValue(CELL_HUM, String(humidity, 0) + " %", ST77XX_YELLOW);
-  drawCellValue(CELL_PRES, String(pressure, 0) + " hPa", ST77XX_CYAN);
-  drawCellValue(CELL_GAS, String((int)gas_resistance) + " ohm", ST77XX_BLUE);
-  drawCellValue(CELL_AQI, aqiText, ST77XX_GREEN);
-  drawCellValue(CELL_STAT, mqttClient.connected() ? "MQTT OK" : "MQTT OFF", ST77XX_WHITE);
+  drawCellValue(CELL_TEMP, String(temperature, 1) + " C", UI_ACCENT_T);
+  drawCellValue(CELL_HUM, String(humidity, 0) + " %", UI_ACCENT_H);
+  drawCellValue(CELL_PRES, String(pressure, 0) + " hPa", UI_ACCENT_P);
+  drawCellValue(CELL_GAS, String((int)gas_resistance) + " ohm", UI_ACCENT_G);
+  drawCellValue(CELL_AQI, aqiText, UI_ACCENT_A);
+  drawCellValue(CELL_STAT, mqttClient.connected() ? "MQTT OK" : "MQTT OFF", UI_TEXT);
 }
 
 
@@ -343,22 +384,13 @@ void reconnectMqtt() {
 }
 
 void setupWiFi() {
-  delay(10);
   Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
-
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - start) < 20000) {
-    delay(500);
-    Serial.print(".");
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi connected");
-  } else {
-    Serial.println("\nWiFi connect timeout");
-  }
+  lastWiFiAttempt = millis();
 }
 
 // -------------------- Setup --------------------
@@ -386,7 +418,8 @@ void setup() {
 
 // -------------------- Loop --------------------
 void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
+  if (WiFi.status() != WL_CONNECTED && (millis() - lastWiFiAttempt) > wifiReconnectInterval) {
+    WiFi.disconnect();
     setupWiFi();
   }
 
