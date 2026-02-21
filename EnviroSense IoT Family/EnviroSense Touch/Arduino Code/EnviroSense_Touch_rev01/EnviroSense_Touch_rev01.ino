@@ -91,6 +91,31 @@ unsigned long lastTouchMs = 0;
 bool displayBlanked = false;
 bool uiInitialized = false;
 
+//---------> History View <---------
+const unsigned long historyIntervalMs = 30UL * 60UL * 1000UL;
+unsigned long lastHistorySampleMs = 0;
+const int HISTORY_SAMPLES = 48;  // 24 hours @ 30-minute intervals
+bool historyViewActive = false;
+bool historyDirty = true;
+int historyMetric = 0;  // 0=T,1=H,2=eCO2,3=TVOC
+
+struct HistorySeries {
+  float values[HISTORY_SAMPLES];
+  uint8_t count = 0;
+  uint8_t head = 0;
+};
+
+HistorySeries histTemp;
+HistorySeries histHum;
+HistorySeries histCO2;
+HistorySeries histTVOC;
+
+// Touch calibration (adjust if touch mapping is off)
+const int TS_MINX = 200;
+const int TS_MAXX = 3800;
+const int TS_MINY = 200;
+const int TS_MAXY = 3800;
+
 //---------> UI Styling <---------
 uint16_t COLOR_BG;
 uint16_t COLOR_PANEL;
@@ -150,6 +175,11 @@ void SendMQTTMessages(const char* topic, String parameter);
 float Difrentiator(float a, float b);
 void Progressor(String in);
 String WeatherRequest();
+bool GetTouchPoint(int& x, int& y);
+void RecordHistoryIfDue();
+void HistoryPush(HistorySeries& series, float value);
+void RenderHistory();
+void DrawHistoryPlot(const HistorySeries& series, const char* title, const char* unit, uint16_t accent);
 //--------------------------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
@@ -224,6 +254,7 @@ void StateMachine() {
     case 5:
       {
         UpdateDisplay();
+        RecordHistoryIfDue();
         state = 0;
         break;
       }
@@ -329,14 +360,40 @@ void HandleTouch() {
   lastTouchMs = now;
   touchOverrideTime = now;
 
-  // Read the touch point to clear the controller state and keep display awake.
-  if (ts.touched()) {
-    TS_Point p = ts.getPoint();
-    (void)p;
+  int tx = 0;
+  int ty = 0;
+  if (!GetTouchPoint(tx, ty)) {
+    return;
   }
 
-  // Force a refresh when waking the screen.
-  DisplayManager();
+  if (historyViewActive) {
+    historyViewActive = false;
+    uiInitialized = false;
+    DisplayManager();
+    return;
+  }
+
+  // Determine which tile was touched and switch to history view.
+  if (tx >= tileT.x && tx <= (tileT.x + tileT.w) && ty >= tileT.y && ty <= (tileT.y + tileT.h)) {
+    historyMetric = 0;
+    historyViewActive = true;
+  } else if (tx >= tileH.x && tx <= (tileH.x + tileH.w) && ty >= tileH.y && ty <= (tileH.y + tileH.h)) {
+    historyMetric = 1;
+    historyViewActive = true;
+  } else if (tx >= tileCO2.x && tx <= (tileCO2.x + tileCO2.w) && ty >= tileCO2.y && ty <= (tileCO2.y + tileCO2.h)) {
+    historyMetric = 2;
+    historyViewActive = true;
+  } else if (tx >= tileTVOC.x && tx <= (tileTVOC.x + tileTVOC.w) && ty >= tileTVOC.y && ty <= (tileTVOC.y + tileTVOC.h)) {
+    historyMetric = 3;
+    historyViewActive = true;
+  }
+
+  if (historyViewActive) {
+    historyDirty = true;
+    RenderHistory();
+  } else {
+    DisplayManager();
+  }
 
   // tft.fillScreen(ILI9341_BLACK);
   // tft.setCursor(0, 0);
@@ -433,6 +490,12 @@ void DisplayManager() {
   }
 
   displayBlanked = false;
+
+  if (historyViewActive) {
+    RenderHistory();
+    return;
+  }
+
   if (!uiInitialized) {
     RenderUIStatic();
     uiInitialized = true;
@@ -564,6 +627,152 @@ void DrawTileValue(const UiTile& tile, const String& value, const char* unit) {
   int uy = vy + 28;
   tft.setCursor(ux, uy);
   tft.print(unit);
+}
+
+bool GetTouchPoint(int& x, int& y) {
+  if (!ts.touched()) {
+    return false;
+  }
+
+  TS_Point p = ts.getPoint();
+  if (p.z < 200) {
+    return false;
+  }
+
+  int16_t sx = map(p.y, TS_MINY, TS_MAXY, 0, tft.width());
+  int16_t sy = map(p.x, TS_MINX, TS_MAXX, 0, tft.height());
+
+  if (sx < 0 || sy < 0 || sx >= tft.width() || sy >= tft.height()) {
+    return false;
+  }
+
+  x = sx;
+  y = sy;
+  return true;
+}
+
+void RecordHistoryIfDue() {
+  unsigned long now = millis();
+  if (lastHistorySampleMs == 0 || (now - lastHistorySampleMs) >= historyIntervalMs) {
+    lastHistorySampleMs = now;
+    HistoryPush(histTemp, temp);
+    HistoryPush(histHum, humid);
+    HistoryPush(histCO2, eCo2);
+    HistoryPush(histTVOC, tVoc);
+    historyDirty = true;
+  }
+}
+
+void HistoryPush(HistorySeries& series, float value) {
+  series.values[series.head] = value;
+  series.head = (series.head + 1) % HISTORY_SAMPLES;
+  if (series.count < HISTORY_SAMPLES) {
+    series.count++;
+  }
+}
+
+void RenderHistory() {
+  if (!historyDirty) {
+    return;
+  }
+
+  historyDirty = false;
+  tft.fillScreen(COLOR_BG);
+
+  switch (historyMetric) {
+    case 0:
+      DrawHistoryPlot(histTemp, "Temp - Last 24h", "C", COLOR_ACCENT_T);
+      break;
+    case 1:
+      DrawHistoryPlot(histHum, "Humidity - Last 24h", "%", COLOR_ACCENT_H);
+      break;
+    case 2:
+      DrawHistoryPlot(histCO2, "eCO2 - Last 24h", "ppm", COLOR_ACCENT_CO2);
+      break;
+    case 3:
+    default:
+      DrawHistoryPlot(histTVOC, "TVOC - Last 24h", "ppb", COLOR_ACCENT_TVOC);
+      break;
+  }
+
+  // Footer hint
+  tft.setTextColor(COLOR_SUBTEXT);
+  tft.setTextSize(1);
+  tft.setCursor(6, tft.height() - 10);
+  tft.print("Tap anywhere to return");
+}
+
+void DrawHistoryPlot(const HistorySeries& series, const char* title, const char* unit, uint16_t accent) {
+  int w = tft.width();
+  int h = tft.height();
+  int margin = 12;
+  int top = 20;
+  int bottom = h - 20;
+  int left = margin;
+  int right = w - margin;
+
+  tft.setTextColor(COLOR_TEXT);
+  tft.setTextSize(2);
+  tft.setCursor(6, 2);
+  tft.print(title);
+
+  tft.drawRect(left, top, right - left, bottom - top, tft.color565(40, 50, 70));
+
+  if (series.count == 0) {
+    tft.setTextColor(COLOR_SUBTEXT);
+    tft.setTextSize(1);
+    tft.setCursor(left + 6, top + 10);
+    tft.print("Collecting samples...");
+    return;
+  }
+
+  // Determine min/max
+  float minV = series.values[0];
+  float maxV = series.values[0];
+  for (uint8_t i = 0; i < series.count; i++) {
+    float v = series.values[i];
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
+  }
+  if (minV == maxV) {
+    maxV = minV + 1.0f;
+  }
+
+  // Plot from oldest to newest
+  int plotW = right - left - 2;
+  int plotH = bottom - top - 2;
+  int samples = series.count;
+
+  int start = (series.head + HISTORY_SAMPLES - series.count) % HISTORY_SAMPLES;
+  int prevX = -1;
+  int prevY = -1;
+  if (samples == 1) {
+    int x = left + 1 + plotW / 2;
+    int y = bottom - 2 - (int)(((series.values[start] - minV) / (maxV - minV)) * plotH);
+    tft.fillCircle(x, y, 2, accent);
+  } else {
+    for (int i = 0; i < samples; i++) {
+    int idx = (start + i) % HISTORY_SAMPLES;
+    float v = series.values[idx];
+    float norm = (v - minV) / (maxV - minV);
+    int x = left + 1 + (plotW * i) / (samples - 1);
+    int y = bottom - 2 - (int)(norm * plotH);
+
+    if (prevX >= 0) {
+      tft.drawLine(prevX, prevY, x, y, accent);
+    }
+    prevX = x;
+    prevY = y;
+    }
+  }
+
+  // Min/Max labels
+  tft.setTextColor(COLOR_SUBTEXT);
+  tft.setTextSize(1);
+  tft.setCursor(left, bottom + 4);
+  tft.print(String(minV, 1) + unit);
+  tft.setCursor(right - 40, bottom + 4);
+  tft.print(String(maxV, 1) + unit);
 }
 
 void DrawSensorButton(int x, int y, int cx, int cy, String label, String value, uint16_t color) {
