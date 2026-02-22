@@ -117,11 +117,11 @@ void applyFallbackFromSecrets() {
   if (cfgMqttPort <= 0) cfgMqttPort = mqtt_port;
 }
 
-void parseConfigLine(const String& line) {
-  int eq = line.indexOf('=');
+void parseConfigLine(const String& lineText) {
+  int eq = lineText.indexOf('=');
   if (eq <= 0) return;
-  String key = line.substring(0, eq);
-  String val = line.substring(eq + 1);
+  String key = lineText.substring(0, eq);
+  String val = lineText.substring(eq + 1);
   key.trim();
   val.trim();
 
