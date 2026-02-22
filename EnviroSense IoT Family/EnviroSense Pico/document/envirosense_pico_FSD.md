@@ -16,7 +16,7 @@ Functional blocks:
 - Sensor acquisition: BME680 temperature, humidity, pressure, gas resistance
 - Data processing: temperature offset, gas-based AQI classification
 - Display: 80x160 TFT, color-coded readings
-- Connectivity: WiFi + MQTT
+- Connectivity: WiFi + MQTT, WiFi fallback AP + setup portal
 - Home Assistant integration: MQTT Discovery
 
 ## 4. Hardware Requirements
@@ -54,6 +54,7 @@ Configuration file:
 ### 6.1 Startup and Initialization
 - The firmware shall initialize Serial at 115200 baud.
 - The firmware shall connect to the configured WiFi network.
+- If WiFi does not connect within `wifiConnectTimeout`, the firmware shall start an Access Point and configuration portal.
 - The firmware shall initialize the ST7735 display with `INITR_MINI160x80`.
 - The firmware shall initialize the BME680 sensor and configure oversampling and gas heater settings.
 - The firmware shall configure the MQTT client with the broker address and port.
@@ -95,7 +96,14 @@ Configuration file:
 - If MQTT disconnects, the firmware shall attempt reconnection in a loop with a 5-second delay between attempts.
 - On successful MQTT connect, the firmware shall publish Home Assistant MQTT discovery config topics.
 
-### 6.6 MQTT Discovery
+### 6.6 WiFi Fallback Portal
+- If WiFi fails to connect within `wifiConnectTimeout`, the firmware shall start AP mode with SSID `EnviroSensePico-<chipid>`.
+- The firmware shall host a setup page at `http://192.168.4.1` for entering WiFi and MQTT credentials.
+- Credentials shall be saved in LittleFS and persist across reboots.
+- If a saved config exists, it shall be loaded at boot and used before `secrets.h` fallback.
+- If no saved config exists and `secrets.h` has values, those values shall be written to LittleFS once.
+
+### 6.7 MQTT Discovery
 The firmware shall publish retained discovery config topics:
 - `homeassistant/sensor/enviroSense_temperature/config`
 - `homeassistant/sensor/enviroSense_humidity/config`
@@ -103,7 +111,7 @@ The firmware shall publish retained discovery config topics:
 - `homeassistant/sensor/enviroSense_gas/config`
 - `homeassistant/sensor/enviroSense_aqi/config`
 
-### 6.7 MQTT State Publishing
+### 6.8 MQTT State Publishing
 - The firmware shall publish retained state topics at `mqttInterval`:
   - `EnviroSense/temperature` (float, 2 decimals)
   - `EnviroSense/humidity` (float, 2 decimals)
@@ -115,6 +123,7 @@ The firmware shall publish retained discovery config topics:
 - `sensorInterval`: 2000 ms
 - `displayInterval`: 2000 ms (defined and used for minimum refresh cadence)
 - `mqttInterval`: 60000 ms
+- `wifiConnectTimeout`: 30000 ms
 
 ## 8. Error Handling
 - If the BME680 initialization fails, the firmware shall halt in an infinite loop.
@@ -136,6 +145,8 @@ Key configuration values in firmware:
 - `sensorInterval` (default: 2000 ms)
 - `displayInterval` (default: 2000 ms)
 - `mqttInterval` (default: 60000 ms)
+- `wifiConnectTimeout` (default: 30000 ms)
+- `CONFIG_FILE` (default: `/config.txt` in LittleFS)
 
 ## 11. Assumptions and Constraints
 - WiFi and MQTT broker are available and stable.
@@ -147,7 +158,6 @@ Key configuration values in firmware:
 - Replace gas-based AQI proxy with BSEC IAQ calculation.
 - Add battery/power-saving modes.
 - Provide OTA firmware updates.
-- Add display of WiFi/MQTT status.
 - Implement `displayInterval` or remove unused timer.
 
 ## 13. Findings / Improvement Areas (Firmware Review)

@@ -60,6 +60,7 @@ Optional:
    * `Adafruit ST7735` for TFT display
    * `ESP8266WiFi` for WiFi
    * `PubSubClient` for MQTT
+   * `LittleFS`, `ESP8266WebServer`, `DNSServer` (ESP8266 core)
 
 2. Configure your WiFi and MQTT credentials in `secrets.h` (not committed to Git):
 
@@ -76,6 +77,24 @@ const char* mqtt_pass = "MQTT_PASS";
 3. Upload the code to your ESP8266.
 
 4. Ensure Home Assistant is running with the MQTT broker enabled.
+
+---
+
+## WiFi Fallback (rev01)
+
+Revision `rev01` adds a WiFi fallback portal using LittleFS:
+
+* The device tries to connect for 30 seconds.
+* If it fails, it starts an access point and hosts a setup page.
+* Credentials are saved to LittleFS and persist across reboots.
+* `secrets.h` remains the fallback if no saved config exists.
+* On first boot, valid `secrets.h` values are saved into LittleFS automatically.
+
+### How to Connect
+1. Power the device and wait ~30 seconds.
+2. Connect to the AP named `EnviroSensePico-<chipid>`.
+3. Open `http://192.168.4.1` and enter WiFi + MQTT settings.
+4. The device reboots and connects using the saved config.
 
 ---
 
