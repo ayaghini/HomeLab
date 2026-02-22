@@ -73,12 +73,16 @@ Configuration file:
   - Humidity changes by >= `humidityThreshold`.
   - Gas resistance changes by >= `gasThreshold`.
   - AQI text category changes.
+- The display shall render a 3x2 grid of labeled cells:
+  - TEMP, HUM, PRES, GAS, AQI, STAT.
 - The display shall render:
+  - Temperature (orange, size 1)
+  - Humidity (cyan, size 1)
+  - Pressure (light blue, size 1)
   - Gas resistance (blue, size 1)
-  - AQI text (green, size 2)
-  - Temperature (red, size 2)
-  - Humidity (yellow, size 2)
-  - Pressure (cyan, size 2)
+  - AQI text (green, size 1)
+  - MQTT status (white, size 1)
+- The header shall show WiFi and MQTT status dots.
 
 ### 6.4 AQI Classification
 - AQI shall be derived from gas resistance:
@@ -108,9 +112,9 @@ The firmware shall publish retained discovery config topics:
   - `EnviroSense/aqi` (string: `Good`, `Moderate`, `Poor`)
 
 ## 7. Timing Requirements
-- `sensorInterval`: 10000 ms
-- `displayInterval`: 2000 ms (defined but not used; display updates are event-driven)
-- `mqttInterval`: 10000 ms
+- `sensorInterval`: 2000 ms
+- `displayInterval`: 2000 ms (defined and used for minimum refresh cadence)
+- `mqttInterval`: 60000 ms
 
 ## 8. Error Handling
 - If the BME680 initialization fails, the firmware shall halt in an infinite loop.
@@ -129,8 +133,9 @@ Key configuration values in firmware:
 - `tempThreshold` (default: 1.0 C)
 - `humidityThreshold` (default: 5.0 %)
 - `gasThreshold` (default: 100000 Ohms)
-- `sensorInterval` (default: 10000 ms)
-- `mqttInterval` (default: 10000 ms)
+- `sensorInterval` (default: 2000 ms)
+- `displayInterval` (default: 2000 ms)
+- `mqttInterval` (default: 60000 ms)
 
 ## 11. Assumptions and Constraints
 - WiFi and MQTT broker are available and stable.
@@ -144,3 +149,12 @@ Key configuration values in firmware:
 - Provide OTA firmware updates.
 - Add display of WiFi/MQTT status.
 - Implement `displayInterval` or remove unused timer.
+
+## 13. Findings / Improvement Areas (Firmware Review)
+1. MQTT discovery and state topics are not device-unique; multiple devices will collide on the same topics.
+2. TFT reset is wired to `RX`, which can conflict with Serial usage.
+3. FSD vs firmware drift exists (intervals and display details).
+4. Heavy `String` usage in hot paths can fragment heap over long uptime.
+5. Serial logging runs every sensor cycle; consider gating or rate limiting for production.
+6. MQTT availability reflects only MQTT connection; WiFi loss may not publish `offline`.
+7. Display refresh depends on thresholds; add a max-age refresh to avoid stale display.
