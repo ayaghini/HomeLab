@@ -8,18 +8,22 @@ Welcome to my **experimental homelab journey** — a living notebook where I tes
 
 ## 📚 Repository map
 
-| Folder | What you’ll find | Highlights |
+| Folder | What you’ll find | Start here |
 |--------|------------------|------------|
-| `Hardware/` | Bill of materials, rack layout & power budget | Low‑power mini‑PC cluster • 10 GbE backbone • UPS & PDU notes |
-| `ProxMox/` | IaC for the hypervisor layer | Terraform • cloud‑init • HA cluster config |
-| `TrueNas/` | ZFS storage design & backup strategy | Pool layout • snapshot & replication jobs |
-| `Networking/` | RouterOS / pfSense snippets, VLAN plan, DNS & DHCP | WireGuard site‑to‑site • mDNS reflector |
-| `Home Assistant/` | Smart‑home automations & dashboards | Zigbee2MQTT • ESPHome • presence detection |
-| `MediaServer/` | Plex / Jellyfin / *arr stack compose files | GPU transcoding • automated media acquisition |
-| `NextCloud/` | Private cloud & file‑sync | Ansible role • S3‑backed external storage |
-| `LLM/` | Local‑first AI experiments | Ollama • llama.cpp with GPU acceleration |
-| `Raspberry pi Cluster/` | k3s on 4 × RPi 4 | GitOps pipeline • MetalLB • sealed‑secrets |
-| `Raspberry pi Server/` | Solo SBC utilities | Pi‑hole • Pi‑KVM |
+| `EnviroSense IoT Family/` | Air‑quality sensor projects (Pico, Touch, Ikea integration) | `EnviroSense IoT Family/EnviroSense Pico/readme.md` |
+| `Hardware/` | Rackmount + wall‑mount CAD and prints | `Hardware/Rackmount/readme.md` |
+| `ProxMox/` | Proxmox notes and PBS setup | `ProxMox/readme.md` |
+| `TrueNas/` | TrueNAS setup notes and ZFS practices | `TrueNas/readme.md` |
+| `Networking/` | Networking basics and reference links | `Networking/Basic Knowledge/basics.md` |
+| `Home Assistant/` | Home Assistant integrations (Bluetti UPS notes) | `Home Assistant/readme.md` |
+| `MediaServer/` | Automated ripping machine + Jellyfin/NAS notes | `MediaServer/readme.md` |
+| `NextCloud/` | Nextcloud on TrueNAS (datasets + install) | `NextCloud/readme.md` |
+| `LLM/` | Local LLM tooling notes | `LLM/getting_started.md` |
+| `Raspberry pi Cluster/` | RPi cluster notes | `Raspberry pi Cluster/readme.md` |
+| `Raspberry pi Server/` | Solo SBC utilities (placeholder) | `Raspberry pi Server/readme.md` |
+| `Kids Audio Player/` | DIY Yoto‑style player build log | `Kids Audio Player/readme.md` |
+| `LED Matrix/` | LED matrix CAD files | `LED Matrix/` |
+| `Misc/` | One‑off CAD projects | `Misc/` |
 
 *(If a folder is empty it’s because I haven’t finished writing things up yet — stay tuned!)*
 
@@ -40,13 +44,14 @@ Welcome to my **experimental homelab journey** — a living notebook where I tes
 git clone https://github.com/ayaghini/HomeLab.git
 cd HomeLab
 
-# 2. Read hardware & network docs
-less Hardware/README.md
-less Networking/README.md
+# 2. Start with hardware and networking notes
+less "Hardware/Rackmount/readme.md"
+less "Networking/Basic Knowledge/basics.md"
 
-# 3. Bootstrap Proxmox
-cd ProxMox/bootstrap
-ansible-playbook site.yml --ask-become-pass
+# 3. Core services
+less "ProxMox/proxmox_backup_server.md"
+less "TrueNas/readme.md"
+less "Home Assistant/readme.md"
 ```
 
 Then open the GitOps pipeline and start layering on services from the topic folders.
