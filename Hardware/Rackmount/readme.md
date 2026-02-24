@@ -1,28 +1,33 @@
-![Custom designed rackmount hardware]("Rackmount assembly20250218.png")
+# Custom Rackmount Hardware
 
-# Custom Designed and Built Rackmount Items
+![Custom designed rackmount hardware](Rackmount assembly20250218.png)
 
-## 3U Raspberry Pi 7-Inch Touch Screen Holder
-- Designed to fit half of a 19" rack.
-- Securely holds a Raspberry Pi with a 7-inch touchscreen display.
-- Ideal for compact and organized setups in a rack environment.
+Custom parts designed for this homelab rack and 3D-printed for deployment.
 
-## 3U Rackmount Raspberry Pi Holder
-- Features **six slots** to accommodate:
-  - Up to **six Raspberry Pis**.
-  - A **custom-designed keystone RJ45 holder** with **five Raspberry Pis**.
-  - Any desired combination of Raspberry Pis and keystone modules.
+## 3U Raspberry Pi 7-inch touchscreen holder
 
-## 3U Rackmount for Advantech PoE Switch & Raspberry Pis
-- Houses an **Advantech PoE switch**.
-- Includes a **2-port keystone holder**.
-- Provides space for **four Raspberry Pis**.
-- Optimized for efficient networking and computing in a compact 3U space.
+- Half-width 19-inch rack fit.
+- Holds one Raspberry Pi with official 7-inch touchscreen.
+- Intended as a local control panel in-rack.
 
-## Custom Patch Panel for TRENDnet TEG-S24DG Switch
-- Specifically designed to complement the **TRENDnet TEG-S24DG switch**.
-- Converts the switch into a **1U rackmount switch patch panel**.
-- Enhances cable management and accessibility in rack installations.
+## 3U Raspberry Pi multi-holder
 
-These designs ensure efficient utilization of rack space, improved cable management, and seamless integration of Raspberry Pis and networking equipment.
+- Six-slot design.
+- Supports all-Pi layout or mixed Pi + keystone layout.
+- Keystone option includes custom RJ45 holder variant.
 
+## 3U holder for Advantech PoE switch + Raspberry Pis
+
+- Fits Advantech PoE switch.
+- Includes 2-port keystone holder section.
+- Additional space for up to four Raspberry Pis.
+
+## 1U patch panel for TRENDnet TEG-S24DG
+
+- Custom panel matched to switch footprint.
+- Improves cable routing and front-of-rack accessibility.
+
+## Notes
+
+- CAD sources and STLs are kept in this folder hierarchy.
+- Final print settings and material notes should be documented per model.
