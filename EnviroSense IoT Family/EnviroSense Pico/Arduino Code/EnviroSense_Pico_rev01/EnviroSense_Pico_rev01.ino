@@ -578,7 +578,16 @@ void reconnectMqtt() {
 
   Serial.print("Connecting to MQTT...");
   String clientId = String(DEVICE_NAME) + "_" + String(ESP.getChipId(), HEX);
-  if (mqttClient.connect(clientId.c_str(), mqtt_user, mqtt_pass, TOPIC_AVAIL, 0, true, "offline")) {
+  bool connected = false;
+  if (cfgMqttUser.length() > 0) {
+    connected = mqttClient.connect(clientId.c_str(),
+                                   cfgMqttUser.c_str(),
+                                   cfgMqttPass.c_str(),
+                                   TOPIC_AVAIL, 0, true, "offline");
+  } else {
+    connected = mqttClient.connect(clientId.c_str(), TOPIC_AVAIL, 0, true, "offline");
+  }
+  if (connected) {
     mqttClient.publish(TOPIC_AVAIL, "online", true);
     publishDiscovery();
     Serial.println("connected");
